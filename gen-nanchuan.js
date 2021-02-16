@@ -1,10 +1,11 @@
 'use stricts';
 const fs=require("fs");
 const Sax=require("sax");
-const folder="../../CBReader2X/Bookcase/CBETA/XML/N/";
+// const folder="../../CBReader2X/Bookcase/CBETA/XML/N/";
+const folder="cbeta-dvd/N/";
 const allfiles=fs.readFileSync("./nanchuan.lst","utf8").split(/\r?\n/);
 //const files=allfiles.splice(56,34);
-const {LANGSEP}=require("dengine")
+const LANGSEP='|||';
 const set='nanchuan';
 //var notes=require("./notes");
 //var textbody=require("./textbody");
@@ -54,7 +55,7 @@ var p5tojson=function(content,vol,file){
 			}
 		} else if (e.name=="lb") {
 			//if (lb=="13:39.01") debugger
-			let linet=linetext.trim().replace(/\r?\n/g,"");
+			let linet=linetext.replace(/\r?\n/g,"");
 			if (notes.length) {
 				linet+=LANGSEP+notes.join("^^");
 				notes.length=0;
@@ -100,7 +101,7 @@ var p5tojson=function(content,vol,file){
 			throw "unbalance tag"
 		}
 		if (name=="l"){
-			linetext="　"+linetext.trim();
+			linetext="　　　"+linetext.trim();
 		}else if (name=="note"){
 			let nt=notetext.trim(); //some notes has crlf
 			notetext='';
