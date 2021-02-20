@@ -1,3 +1,4 @@
+/* for palipar */
 const {readFileSync}=require('fs');
 const {createbuilder}=require("pengine");
 let dbname='cbeta0nanchuan';

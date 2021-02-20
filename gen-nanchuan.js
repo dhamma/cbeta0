@@ -1,4 +1,8 @@
 'use stricts';
+const standoffNotePtr=true; //use string offset as note ptr
+
+
+
 const fs=require("fs");
 const Sax=require("sax");
 // const folder="../../CBReader2X/Bookcase/CBETA/XML/N/";
@@ -13,6 +17,7 @@ files=allfiles;
 //files.length=10;
 const textlines=[];
 const context={text:[],pts:[],mulu:[]};
+
 
 const tounicodechar=str=>{
 	if (str[0]!=="U")return '';
@@ -37,7 +42,7 @@ let lb='',pagenum;
 var p5tojson=function(content,vol,file){
 	let inbody=false,innote=false;
 	let linetext='',notetext='';
-	let notes=[];
+	let notes=[],standoffets={};
 	var tagstack=[],gref='',textpiece='' ,replacechar={};
 	var defaulthandler=function(parser)	{
 		parser.onopentag=onopentag;
@@ -56,10 +61,16 @@ var p5tojson=function(content,vol,file){
 		} else if (e.name=="lb") {
 			//if (lb=="13:39.01") debugger
 			let linet=linetext.replace(/\r?\n/g,"");
+			
 			if (notes.length) {
-				linet+=LANGSEP+notes.join("^^");
+				const notesuffix=notes.map(note=>{
+					const nid=(standoffNotePtr?standoffets[note[0]]:note[0])
+					return nid+'^'+note[1];
+				}).join("^^");
+				linet+=LANGSEP+notesuffix;
 				notes.length=0;
 			}
+			standoffets={};
 			if (lb) context.text.push([lb,linet]);
 			lb=vol+":"+pagenum+"."+e.attributes.n.substr(5);
 			linetext='';
@@ -76,7 +87,15 @@ var p5tojson=function(content,vol,file){
 			}
 			let n=parseInt(e.attributes.n.substr(4));
 			if (n){
-				linetext+="^"+n;
+				if (standoffNotePtr) {
+					// if (standoffets[n]) {
+						//type="mod" override type="orig" note
+						//console.log('warning repeat note',n,file+'@'+lb);
+					// }
+					standoffets[n]=linetext.length;
+				} else {
+					linetext+="^"+n;
+				}
 			}
 			innote=true;
 		} else if (e.name=="g") {
@@ -119,7 +138,7 @@ var p5tojson=function(content,vol,file){
 				console.log("pro note ",vol,tagattributes.n,file);
 				return;
 			}
-			notes.push([ n+"^"+nt]);
+			notes.push([ n, nt ]);
 		} else if (name=="p") {
 			linetext+=' '
 		} else if (name=="mapping") {
@@ -168,6 +187,7 @@ const dofile=file=>{
 	process.stdout.write("\r"+file);
 	p5tojson(content, vol, file);
 }
+
 files.forEach(dofile)
 
 fs.writeFileSync(set+"-raw.txt",context.text.join("\n"),'utf8');
