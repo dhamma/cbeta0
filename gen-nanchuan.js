@@ -8,12 +8,15 @@ const Sax=require("sax");
 // const folder="../../CBReader2X/Bookcase/CBETA/XML/N/";
 const folder="cbeta-dvd/N/";
 const allfiles=fs.readFileSync("./nanchuan.lst","utf8").split(/\r?\n/);
-//const files=allfiles.splice(56,34);
+
+
 const LANGSEP='|||';
 const set='nanchuan';
 //var notes=require("./notes");
 //var textbody=require("./textbody");
-files=allfiles;
+const files=allfiles;//allfiles.splice(56,34);
+
+//files=allfiles;
 //files.length=10;
 const textlines=[];
 const context={text:[],pts:[],mulu:[]};
@@ -54,8 +57,9 @@ var p5tojson=function(content,vol,file){
 
 		if (tagstack.length==3 && e.name=="body") {
 			inbody=true;
-		} else if (tagstack.length==5 && e.name=="cb:div" ) {
-			if (e.attributes.type=="taisho-notes") {
+		} else if (e.name=="cb:div" ) {
+		    linetext+='\t';
+			if (tagstack.length==5 && e.attributes.type=="taisho-notes") {
 				//notes(context,parser,"cb:div");
 			}
 		} else if (e.name=="lb") {
@@ -71,8 +75,8 @@ var p5tojson=function(content,vol,file){
 				notes.length=0;
 			}
 			standoffets={};
-			if (lb) context.text.push([lb,linet]);
-			lb=vol+":"+pagenum+"."+e.attributes.n.substr(5);
+			if (lb) context.text.push(lb+'\t'+linet);
+			lb=vol+"_"+pagenum+"x"+(parseInt(e.attributes.n.substr(5))-1);
 			linetext='';
 		} else if (e.name=="pb"){
 			pagenum=parseInt(e.attributes.n);
@@ -108,10 +112,13 @@ var p5tojson=function(content,vol,file){
 			gref=e.attributes['xml:id'];
 
 		} else if (e.name=="p") {
-			if (e.attributes.style && e.attributes.style.indexOf('text-indent:2em')>0){
-				linetext+='　　';
-			}
+		//	if (e.attributes.style && e.attributes.style.indexOf('text-indent:2em')>0){
+				linetext+='\t';
+			//}
+		} else if (e.name=='l') {
+		    linetext+='\t　';
 		}
+		 
 
 	}
 	var onclosetag=function(name){
@@ -120,7 +127,7 @@ var p5tojson=function(content,vol,file){
 			throw "unbalance tag"
 		}
 		if (name=="l"){
-			linetext="　　　"+linetext.trim();
+			//linetext="　"+linetext.trim();
 		}else if (name=="note"){
 			let nt=notetext.trim(); //some notes has crlf
 			notetext='';
@@ -140,7 +147,7 @@ var p5tojson=function(content,vol,file){
 			}
 			notes.push([ n, nt ]);
 		} else if (name=="p") {
-			linetext+=' '
+			//linetext+=' '
 		} else if (name=="mapping") {
 			if (gref&&tagattributes.type=="normal_unicode"){
 				replacechar[gref]=tounicodechar(textpiece);
@@ -148,17 +155,17 @@ var p5tojson=function(content,vol,file){
 			}
 		} else if (name=="head") {
 			//head innertext is redundant
-			//linetext=linetext.substr( 0, linetext.length-textpiece.length);
+			linetext=linetext.substr( 0, linetext.length-textpiece.length);
 		} else if (name=="cb:mulu") {
-
 			const lv=tagattributes.level;
+			
 			let num=parseChiNum(textpiece);
 			if (num) {
-				context.mulu.push([lb,lv+"@"+num]);
+				context.mulu.push([lb+'\t'+lv+"@"+num]);
 			} else {
-				context.mulu.push([lb,lv+"@"+textpiece]);
+				context.mulu.push([lb+'\t'+lv+"@"+textpiece]);
 			}
-			linetext=linetext.substr( 0, linetext.length-textpiece.length);
+			//linetext=linetext.substr( 0, linetext.length-textpiece.length);
 			textpiece='';
 		}
 		tagstack.pop();
