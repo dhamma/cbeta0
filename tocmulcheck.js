@@ -8,7 +8,7 @@ const nc=openDB('cbeta0nanchuan');
 console.log('nc toc',nc.toc.length,'mul toc',cs0m.toc.length);
 
 
-const getptsrange_y=x0y_pts=>{ //return pts range from mulx0y structure
+const getptsrange=x0y_pts=>{ //return pts range from mulx0y structure
     const ptsrange=[];
     for (let x0 in x0y_pts){
         for (let y in x0y_pts[x0]) {
@@ -18,7 +18,8 @@ const getptsrange_y=x0y_pts=>{ //return pts range from mulx0y structure
     while (ptsrange.length>2) ptsrange.splice(1,1); //just keep head and tail
     return ptsrange;
 }
-const getptsrange=x0_pts=>{ //return pts range from mulx0 structure (no y)
+/*
+const getptsrange_x=x0_pts=>{ //return pts range from mulx0 structure (no y)
     let ptsrange=[];
     for (let x0 in x0_pts) {
         ptsrange.push(x0_pts[x0]);
@@ -27,8 +28,11 @@ const getptsrange=x0_pts=>{ //return pts range from mulx0 structure (no y)
     while (ptsrange.length>2) ptsrange.splice(1,1);
     return ptsrange;
 }
-const maxcount=100000;
+*/
+const maxcount=21;
 let count=0;
+// console.profile('check')
+console.time('check')
 for (let bk in nc.toc.mula){
     // if (bk!=='vv') continue;
     for (let i=0;i<nc.toc.mula[bk].bk0.length-1;i++) {
@@ -38,7 +42,7 @@ for (let bk in nc.toc.mula){
         const cap=parseCAP(maddr,cs0m);
         const cap2=parseCAP(naddr,cs0m);
         const x0y_pts=PTSInRange(cs0m,cap.x0,cap2.x0-cap.x0);
-        const ptsrange=getptsrange_y(x0y_pts);
+        const ptsrange=getptsrange(x0y_pts);
         const nccap=parseCAP(nc.toc[toci].l,nc);
         const nexttoci=nc.toc.mula[bk].idx[i+1];
         const nccap2=parseCAP(nc.toc[nexttoci].l,nc);
@@ -48,6 +52,10 @@ for (let bk in nc.toc.mula){
         if (ncptsrange.length&&ptsrange.length&&ncptsrange.join(',')!==ptsrange.join(',')) {
             console.log(ncptsrange , nc.toc[toci].l,nc.toc[toci].t, ptsrange,maddr)
         }
+        count++
+        if (count>maxcount) break;
     }
     if (count>maxcount) break;
 }
+// console.profileEnd('check')
+console.timeEnd('check')

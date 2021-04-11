@@ -1,27 +1,7 @@
 'use strict'
 const pat=/([a-z\d]+),(\d+)/
-const {openDB,bsearch,parseCAP}=require('pengine');
-let prevbk='';
-const unpackvolpg=(db,str)=>{ //unpack to x0 for faster match
-    const arr=str.split(','), out=[];
-    let prevx0=0;
-    for (let i=0;i<arr.length;i++) {
-        let addr=arr[i];
-        const at=addr.indexOf('_');
-        if (at>0) {
-            prevbk=addr.substr(0,at);
-        } else {
-            addr=prevbk+'_'+addr;
-        }
-        const cap=parseCAP(addr,db);
-        if (!cap && i) {
-            console.log('unable to parse addr',addr)
-        }
-        out.push(cap?cap.x0: prevx0); //empty slot are fill with nearest x0
-        prevx0=cap?cap.x0:prevx0; 
-    }
-    return out;
-}
+const {openDB,parseCAP}=require('pengine');
+const {unpackvolpg}=require('pengine/pts')
 const parsePTS=pts=>{
     const m=pts.match(pat);
     if (!m) {
@@ -52,8 +32,8 @@ const PTSInRange=(db,x0,w)=>{
         if (x0>arr[arr.length-1])continue;
         for (let i=1;i<arr.length;i++) { //i==0 always zero
             if (arr[i]>=x0 && arr[i]<x0+w) {
-                if (!out[arr[i]]) out[arr[i]]=[];
-                out[arr[i]].push(bk+','+i);
+                if (!out[arr[i]]) out[arr[i]]={};
+                out[arr[i]][0]=bk+','+i; //y=0,只指到行開頭, 
             };
         }
     }
