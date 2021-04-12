@@ -153,6 +153,13 @@ var p5tojson=function(content,vol,file){
 				replacechar[gref]=tounicodechar(textpiece);
 				gref='';
 			}
+		} else if (name=="rdg") { //drop rdg, use lem
+			if (innote) {
+				notetext=notetext.substr(0, notetext.length-textpiece.length);
+			} else {
+				linetext=linetext.substr(0, linetext.length-textpiece.length);
+			}
+			textpiece='';
 		} else if (name=="head") {
 			//head innertext is redundant
 			linetext=linetext.substr( 0, linetext.length-textpiece.length);

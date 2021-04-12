@@ -6,7 +6,7 @@ const raw=readFileSync('./nanchuan-raw.txt','utf8').split(/\r?\n/);
 const build=()=>{
 	const builder=createBuilder({name:dbname,assets:['toc','pts']});
 	let prevbk=0,prevpg=0;
-	debugger
+
 	builder.newpage(1,0,"1"); //cap._ is zero based, need to add a pseudo page 
 	raw.forEach(line=>{
 		const m=line.match(/(\d+)_(\d+)x(\d+)\t(.*)/);
