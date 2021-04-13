@@ -149,7 +149,7 @@ var p5tojson=function(content,vol,file){
 		} else if (name=="p") {
 			//linetext+=' '
 		} else if (name=="mapping") {
-			if (gref&&tagattributes.type=="normal_unicode"){
+			if (gref&&(tagattributes.type=="normal_unicode"||tagattributes.type=="unicode")){
 				replacechar[gref]=tounicodechar(textpiece);
 				gref='';
 			}

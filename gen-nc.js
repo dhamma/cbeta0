@@ -11,7 +11,7 @@ const files=allfiles;//allfiles.splice(56,34);
 
 //files=allfiles;
 // files.length=20;
-const context={text:[],pts:[],mulu:[]};
+const context={text:[],pts:[],mulu:[],headers:[]};
 
 const tounicodechar=str=>{
 	if (str[0]!=="U")return '';
@@ -32,25 +32,30 @@ const parseChiNum=str=>{
 	}
 	return parseInt(s);
 }
-let in_l=false,pagenum;
+let in_l=false;
 var p5tojson=function(content,vol,file){
 	let inbody=false,innote=false;
-	let linetext='',notetext='',paranum='',pparanum='';
+	let linetext='',notetext='',
+	lb_n='',// n of current lb
+	p_n='', // n of current p
+	ppn=''; // last output pn
 	let notes={};
 	var tagstack=[],gref='',textpiece='' ,replacechar={},drop=false;
-	
+	// if (vol!==9 && vol!==10) return;
 	var onopentag=function(e){
 		tagstack.push([e.name,JSON.stringify(e.attributes)]);
-
 		if (tagstack.length==3 && e.name=="body") {
 			inbody=true;
 		} else if (e.name=="cb:div" ) {
-		    linetext+='\t';
+		    // linetext+='\t';
 			if (tagstack.length==5 && e.attributes.type=="taisho-notes") {
 				//notes(context,parser,"cb:div");
 			}
+			p_n=lb_n;
 		} else if (e.name=="lb") {
-
+			const m=e.attributes.n.match(/(\d\d\d\d)a(\d\d)/);
+			if (!m) throw 'invalid lb n'+attributes.n
+			lb_n=parseInt(m[1],10).toString()+String.fromCharCode(parseInt(m[2],10)+0x40);
 		} else if (e.name=="pb"){
 			pagenum=parseInt(e.attributes.n);
 		} else if (e.name=="ref"){
@@ -73,20 +78,36 @@ var p5tojson=function(content,vol,file){
 			drop=true;
 		} else if (e.name=="char"){
 			gref=e.attributes['xml:id'];
-
 		} else if (e.name=="p") {
-			if (e.attributes['xml:id']) {
-				const m=e.attributes['xml:id'].match(/p(\d\d\d\d)a(\d\d)/);
-				if (!m) throw 'invalid p xml:id'+e
-				paranum=parseInt(m[1],10).toString()+String.fromCharCode(parseInt(m[2],10)+0x40);
-			}
+			if (linetext) emitPara(); //輸出第一個p之前，即目錄行的文字。
+			const pn=e.attributes['xml:id'];
+			if (!pn)return;
+			const m=pn.match(/(\d\d\d\d)a(\d\d)/);
+			if (!m) throw 'invalid p xml:id'+pn;
+			p_n=parseInt(m[1],10).toString()+String.fromCharCode(parseInt(m[2],10)+0x40);
 		} else if (e.name=='l') {
 			linetext+='\t';
 		    in_l=true;
-		}
-		 
-
+		}		
 	}
+	const emitPara=()=>{
+		let linet=breakText(linetext).replace(/\t+/g,'\n');
+		linet=extractNote(linet).trim();
+		if (linet) {
+			const pn=p_n?p_n:lb_n;
+			linet=extractRef(linet,vol+'_'+pn);
+			const header=(ppn==pn)?'':(vol+'_'+pn+'|');
+			context.text.push(header+linet);
+			if (header) {
+				const padHeader= vol.toString().padStart(2,'0')+'_'+pn.padStart(4,'0');
+				context.headers.push( padHeader);
+			}
+			notes={};
+			ppn=pn;
+			linetext='';
+		}
+	}
+
 	const extractNote=text=>{
 		if (text.indexOf('^')>-1) { //replace note to offset
 			let note='';
@@ -130,6 +151,26 @@ var p5tojson=function(content,vol,file){
 		}
 		return out;
 	}
+	const breakText=t=>{
+		t=t.replace(/。([」』）〕—]+)/g,'。$1\n')
+		.replace(/。([（「『〔]+)/g,'。\n$1')
+		.replace(/。([\u3400-\u9FFF\uD800-\uDFFF、，]{2})/g, '。\n$1')
+		.replace(/([！？][」』〕]+)/g,'$1\n')
+		.replace(/；/g,'；\n')
+		.replace(/([\u3400-\u9FFF\uD800-\uDFFF、]{3}[^「『\n])諸比丘！/g,'$1\n諸比丘！')
+		.replace(/([」』：])([「『〔])/g,'$1\n$2')
+		.replace(/？([，\u3400-\u9FFF\uD800-\uDFFF]{1,4})！/g,'？\n$1！').trim();
+
+		if (t.length>70) {
+			t=t.replace(/……([一二三四五六七八九十]，)/g,'……\n$1')
+			.replace(/……〔乃至〕……/g,'……〔乃至〕……\n')
+			.replace(/」？/g,'」？\n')
+			.replace(/〔……乃至……〕/g,'〔……乃至……〕\n')
+			.replace(/([^\n\t])(（[一二三四五六七八九〇]+）)([〔「\u3400-\u9FFF\uD800-\uDFFF、]{2})/g,'$1\n$2$3')
+		}
+
+		return t.trim();
+	}
 	var onclosetag=function(name){
 		const tagattributes=JSON.parse(tagstack[tagstack.length-1][1]);
 		if (tagstack[tagstack[tagstack.length-1][0] != name]) {
@@ -152,20 +193,15 @@ var p5tojson=function(content,vol,file){
 			if (notes[n]) console.log('repeated note id',file,paranum,n,notes[n]);
 			notes[n]=nt;
 		} else if (name=="p") {
-			if (paranum) {
-				let linet=linetext.trim().replace(/\t+/g,'\n');
-				linet=extractNote(linet);
-				linet=extractRef(linet,vol+'_'+paranum);
-				const header=pparanum==paranum?'':(vol+'_'+paranum+'|');
-				context.text.push(header+linet);
-				pparanum=paranum;
-				notes={};
-			}
-			linetext='';
+			emitPara();
+
 		} else if (name=="mapping") {
-			if (gref&&tagattributes.type=="normal_unicode"){
+			if (gref&&(tagattributes.type=="normal_unicode"||tagattributes.type=="unicode")){
 				replacechar[gref]=tounicodechar(textpiece);
+				// console.log(replacechar,gref)
 				gref='';
+			} else {
+				if (tagattributes.type!=='PUA') console.log('unknown mapping',tagattributes,gref)
 			}
 		} else if (name=="rdg") { //drop rdg, use lem
 			drop=false;
@@ -175,28 +211,24 @@ var p5tojson=function(content,vol,file){
 			// linetext=linetext.substr( 0, linetext.length-textpiece.length);
 		} else if (name=="cb:mulu") {
 			const lv=tagattributes.level;
-			
 			let num=parseChiNum(textpiece);
 			if (num) {
-				context.mulu.push([paranum+'\t'+lv+"@"+num]);
+				context.mulu.push([lb_n+'\t'+lv+"@"+num]);
 			} else {
-				context.mulu.push([paranum+'\t'+lv+"@"+textpiece]);
+				context.mulu.push([lb_n+'\t'+lv+"@"+textpiece]);
 			}
 			linetext=linetext.substr( 0, linetext.length-textpiece.length);
+			linetext+= String.fromCharCode(0x2460+ (parseInt(lv)-1));
+
 			textpiece='';
+		} else if (name=='body') {
+			emitPara();
 		}
 		tagstack.pop();
 	}
 
 	var ontext=function(t){
 		textpiece=t.replace(/\r?\n/g,'');
-		if (!innote) {
-			textpiece=textpiece.replace(/(。[」』〕]*)/g,'$1\n')
-			.replace(/([！？][」』〕]+)/g,'$1\n')
-	        .replace(/([」』：])([「『〔])/g,'$1\n$2')
-	        .replace(/？([，\u3400-\u9FFF\uD800-\uDFFF]{1,4})！/g,'？\n$1！');
-		}
-
 		if (!inbody)return;
 
 		if (innote) {
@@ -223,6 +255,6 @@ const dofile=file=>{
 files.forEach(dofile)
 
 fs.writeFileSync(set+"-raw.txt",context.text.join("\n"),'utf8');
-//fs.writeFileSync(set+"-note.txt",context.notes.join("\n"),'utf8');
+fs.writeFileSync(set+"-headers.txt",context.headers.join("\n"),'utf8'); //bsearch ok
 fs.writeFileSync(set+"-pts.txt",context.pts.join('\n'),'utf8');//
 fs.writeFileSync(set+"-mulu.txt",context.mulu.join('\n'),'utf8');

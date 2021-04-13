@@ -3,7 +3,10 @@
 
 const {readFileSync}=require('fs');
 const {writeExtra}=require('pengine/builder')
-const lines=readFileSync('./nanchuan-pts.txt','utf8').split(/\r?\n/);
+const dbname='nc';  // or nanchuan
+
+const lines=readFileSync(dbname+'-pts.txt','utf8').split(/\r?\n/);
+
 const renames={
     Vin: 'v',   
     D: 'd',   M: 'm', S: 's',A: 'a',
@@ -57,5 +60,5 @@ lines.forEach(line=>{
 for (let bk in ptspages) {
     ptspages[bk]=ptspages[bk].join(',');
 }
-writeExtra("nanchuan/nanchuan.pts.js",
-{"name":"cbeta0nanchuan","type":"pts"},JSON.stringify(ptspages));
+writeExtra(dbname+'/'+dbname+'.pts.js',
+{"name":"cbeta0"+dbname,"type":"pts"},JSON.stringify(ptspages));
