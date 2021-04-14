@@ -2,13 +2,15 @@
 'use strict'
 const {readFileSync}=require('fs');
 const {createBuilder}=require("pengine/builder");
+const { pack,pack_delta } = require('pengine/packintarr');
 let dbname='cbeta0nc';
 const raw=readFileSync('./nc-raw.txt','utf8').split(/\r?\n/);
 // raw.length=7429;
 const build=()=>{
 	const builder=createBuilder({name:dbname,assets:['toc','pts'],pagepat:"999A"});
 	let prevbk=0;
-	raw.forEach(line=>{
+	const headerline=[];
+	raw.forEach((line,idx)=>{
         const m=line.match(/(\d+)_([\d]+[A-Z])\|/);
         if (m) {
             const [m0,bk,pn]=m;
@@ -20,10 +22,13 @@ const build=()=>{
             builder.newpage(pn,0,bk);
             prevbk=bk;
         }
+		if (line.match(/[\u2460-\u2473]/)) {
+			headerline.push(idx);
+		}
         builder.addline(line);
 	});
 	builder.addbook(prevbk);
 	const payload=[];//for PTS mapping
-	builder.done(payload,{});
+	builder.done(payload,{headerline:pack_delta(headerline)});
 }
 build();

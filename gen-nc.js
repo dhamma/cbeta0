@@ -157,7 +157,7 @@ var p5tojson=function(content,vol,file){
 		.replace(/。([\u3400-\u9FFF\uD800-\uDFFF、，]{2})/g, '。\n$1')
 		.replace(/([！？][」』〕]+)/g,'$1\n')
 		.replace(/；/g,'；\n')
-		.replace(/([\u3400-\u9FFF\uD800-\uDFFF、]{3}[^「『\n])諸比丘！/g,'$1\n諸比丘！')
+		.replace(/([\u3400-\u9FFF\uD800-\uDFFF、]{3}[^「『\n])([\u3400-\u9FFF]{1,5})！/g,'$1\n$2！')
 		.replace(/([」』：])([「『〔])/g,'$1\n$2')
 		.replace(/？([，\u3400-\u9FFF\uD800-\uDFFF]{1,4})！/g,'？\n$1！').trim();
 
@@ -219,7 +219,6 @@ var p5tojson=function(content,vol,file){
 			}
 			linetext=linetext.substr( 0, linetext.length-textpiece.length);
 			linetext+= String.fromCharCode(0x2460+ (parseInt(lv)-1));
-
 			textpiece='';
 		} else if (name=='body') {
 			emitPara();
