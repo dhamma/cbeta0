@@ -67,8 +67,8 @@ for (let i=0;i<T.length;i++) {
     T[i].length=2;
 }
 
-const out=T.filter(([f,t])=> f && ((f+t.length>MINTHRESHOLD || t.length==1)));
-
+const out=T.filter(([f,t])=> f && t.length>1&&((f+t.length>MINTHRESHOLD /*|| t.length==1*/)));
+out.sort((a,b)=>b[0]-a[0]);
 writeFileSync('tokentable.txt',out.join('\n'),'utf8')
 // const compressed=compress(out.map(item=>item[1]));
 // writeFileSync('tokentable-compress.txt',compressed.join('\n'),'utf8')
