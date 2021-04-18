@@ -37,6 +37,7 @@ var p5tojson=function(content,vol,file){
 	let inbody=false,innote=false;
 	let linetext='',notetext='',
 	lb_n='',// n of current lb
+	mulu_n='', //n of mulu start
 	p_n='', // n of current p
 	ppn=''; // last output pn
 	let notes={};
@@ -47,11 +48,7 @@ var p5tojson=function(content,vol,file){
 		if (tagstack.length==3 && e.name=="body") {
 			inbody=true;
 		} else if (e.name=="cb:div" ) {
-		    // linetext+='\t';
-			if (tagstack.length==5 && e.attributes.type=="taisho-notes") {
-				//notes(context,parser,"cb:div");
-			}
-			p_n=lb_n;
+			// if (tagstack.length==5 && e.attributes.type=="taisho-notes") {}
 		} else if (e.name=="lb") {
 			const m=e.attributes.n.match(/(\d\d\d\d)a(\d\d)/);
 			if (!m) throw 'invalid lb n'+attributes.n
@@ -67,7 +64,6 @@ var p5tojson=function(content,vol,file){
 			if (e.attributes.type!=='orig')return;
 			let n=e.attributes.n;
 			if (n)linetext+='^'+n;
-			
 		} else if (e.name=="g") {
 			let ref=e.attributes.ref.substr(1);
 			if (replacechar[ref]) {
@@ -78,23 +74,25 @@ var p5tojson=function(content,vol,file){
 			drop=true;
 		} else if (e.name=="char"){
 			gref=e.attributes['xml:id'];
-		} else if (e.name=="p") {
-			if (linetext) emitPara(); //輸出第一個p之前，即目錄行的文字。
+		} else if (e.name=="p" || e.name=='lg' ) {
+			if (linetext) {
+				emitPara(); //輸出第一個p之前，即目錄行的文字。
+			}
 			const pn=e.attributes['xml:id'];
 			if (!pn)return;
-			const m=pn.match(/(\d\d\d\d)a(\d\d)/);
+			const m=pn.match(/p(\d\d\d\d)a(\d\d)/);
 			if (!m) throw 'invalid p xml:id'+pn;
 			p_n=parseInt(m[1],10).toString()+String.fromCharCode(parseInt(m[2],10)+0x40);
 		} else if (e.name=='l') {
 			linetext+='\t';
 		    in_l=true;
-		}		
+		}
 	}
 	const emitPara=()=>{
 		let linet=breakText(linetext).replace(/\t+/g,'\n');
 		linet=extractNote(linet).trim();
 		if (linet) {
-			const pn=p_n?p_n:lb_n;
+			const pn=mulu_n?mulu_n:p_n;
 			linet=extractRef(linet,vol+'_'+pn);
 			const header=(ppn==pn)?'':(vol+'_'+pn+'|');
 			context.text.push(header+linet);
@@ -106,6 +104,7 @@ var p5tojson=function(content,vol,file){
 			ppn=pn;
 			linetext='';
 		}
+		mulu_n='';
 	}
 
 	const extractNote=text=>{
@@ -114,11 +113,13 @@ var p5tojson=function(content,vol,file){
 			text=text.split('\n').map(line=>{
 				let noteptrlen=0;
 				let t=line.replace(/\^(\d+)/g,(m,m1,off)=>{
+					if (!notes[m1]) return ''; //deal with drop table in vol 52, note 0122013 and so on
 					note+=(off - noteptrlen)+'^'+notes[m1]+' ';
 					noteptrlen+=m.length;
 					return '';
 				})
 				if (note) {
+					if (!t) t="*";//若有注釋，本文不得為空 see 52_237H
 					t+=NOTESEP+note;
 					note='';
 				}
@@ -146,27 +147,27 @@ var p5tojson=function(content,vol,file){
 					context.pts.push([vpn+(linecount?'x'+linecount:'')+','+ref.substr(4)]);
 				}
 			}
-			out+=text[i];
+			out+=text[i]||'';
 			i++;
 		}
-		return out;
+		return out.trim();
 	}
 	const breakText=t=>{
-		t=t.replace(/。([」』）〕—]+)/g,'。$1\n')
+		t=t.replace(/。([」』）〕—]+)([\u3400-\u9FFF、，〔（「『]{3})/g,'。$1\n$2')
 		.replace(/。([（「『〔]+)/g,'。\n$1')
-		.replace(/。([\u3400-\u9FFF\uD800-\uDFFF、，]{2})/g, '。\n$1')
-		.replace(/([！？][」』〕]+)/g,'$1\n')
-		.replace(/；/g,'；\n')
-		.replace(/([\u3400-\u9FFF\uD800-\uDFFF、]{3}[^「『\n])([\u3400-\u9FFF]{1,5})！/g,'$1\n$2！')
-		.replace(/([」』：])([「『〔])/g,'$1\n$2')
-		.replace(/？([，\u3400-\u9FFF\uD800-\uDFFF]{1,4})！/g,'？\n$1！').trim();
+		.replace(/。([\u3400-\u9FFF、，（「『]{2,3})/g, '。\n$1')
+		.replace(/；([^\|\n\t])/g,'；\n$1')
+		// .replace(/。([\u3400-\u9FFF]{1,5})！/g,'$1\n$2！')
+		.replace(/([」』：])([「『〔])/g,'$1\n$2');
 
 		if (t.length>70) {
 			t=t.replace(/……([一二三四五六七八九十]，)/g,'……\n$1')
+			.replace(/([！？][」』〕]+)([^\|\n\t])/g,'$1\n$2')
+			.replace(/？([，\u3400-\u9FFF]{1,4})！([\u3400-\u9FFF]{1,2})/g,'？\n$1！$2')
 			.replace(/……〔乃至〕……/g,'……〔乃至〕……\n')
-			.replace(/」？/g,'」？\n')
+			.replace(/」？([^\|\n\t])/g,'」？\n$1')
 			.replace(/〔……乃至……〕/g,'〔……乃至……〕\n')
-			.replace(/([^\n\t])(（[一二三四五六七八九〇]+）)([〔「\u3400-\u9FFF\uD800-\uDFFF、]{2})/g,'$1\n$2$3')
+			.replace(/([^\n\t])(（[一二三四五六七八九〇]+）)([〔「\u3400-\u9FFF])/g,'$1\n$2$3')
 		}
 
 		return t.trim();
@@ -192,9 +193,8 @@ var p5tojson=function(content,vol,file){
 			let n=tagattributes.n;
 			if (notes[n]) console.log('repeated note id',file,paranum,n,notes[n]);
 			notes[n]=nt;
-		} else if (name=="p") {
+		} else if (name=="p" || name=="lg") {
 			emitPara();
-
 		} else if (name=="mapping") {
 			if (gref&&(tagattributes.type=="normal_unicode"||tagattributes.type=="unicode")){
 				replacechar[gref]=tounicodechar(textpiece);
@@ -217,6 +217,7 @@ var p5tojson=function(content,vol,file){
 			} else {
 				context.mulu.push([lb_n+'\t'+lv+"@"+textpiece]);
 			}
+			if (!mulu_n) mulu_n=lb_n; //record n of mulu line group
 			linetext=linetext.substr( 0, linetext.length-textpiece.length);
 			linetext+= String.fromCharCode(0x2460+ (parseInt(lv)-1));
 			textpiece='';
@@ -246,12 +247,14 @@ var p5tojson=function(content,vol,file){
 }
 const dofile=file=>{
 	let vol=parseInt(file.substr(1));
+	// if (vol!==69) return;
 	const content=fs.readFileSync(folder+file,"utf8")
 	process.stdout.write("\r"+file);
 	p5tojson(content, vol, file);
 }
 
 files.forEach(dofile)
+
 
 fs.writeFileSync(set+"-raw.txt",context.text.join("\n"),'utf8');
 fs.writeFileSync(set+"-headers.txt",context.headers.join("\n"),'utf8'); //bsearch ok
