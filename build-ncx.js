@@ -12,7 +12,7 @@ const {initVocabulary,segmentText}=require('pengine/segmenter')
 const {loadJsonP}=require('pengine/textutil')
 const T={} ;       //key 為詞，含posting及position
 const BreakPos=[]; //分詞斷點
-const MAXCHARPERLINE=1024;
+const MAXCHARPERLINE=4096;
 let maxTokenLen=10;
 
 let voc=loadJsonP('nc/nc.voc.js','utf8').split(/\r?\n/).map(item=>{
@@ -136,7 +136,7 @@ const writeIndex=T=>{
     }
     builder.addbook('breakpos');
     hugePostings.sort((a,b)=>b[1]-a[1]);
-    builder.done(tokenTable,{postingsSize:pack(postingsSize)});
+    builder.done(tokenTable,{$postingsSize:pack(postingsSize)});
     return {wcharcount,wordcount,unigramcount,hugePostings};
 }
 

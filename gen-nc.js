@@ -1,17 +1,22 @@
-'use stricts';
+'use strict';
 const fs=require("fs");
 const Sax=require("sax");
 // const folder="../../CBReader2X/Bookcase/CBETA/XML/N/";
-const folder="cbeta-dvd/N/";
-const allfiles=fs.readFileSync("./nanchuan.lst","utf8").split(/\r?\n/);
+const fixerror=require('./errata');
+const set=process.argv[2]||'nc' ;
+
+const folder="cbeta-dvd/"+ {nc:'N',t:'T'}[set] +"/";
+const allfiles=fs.readFileSync("./"+{nc:'nanchuan',t:'taisho'}[set]+".lst","utf8").split(/\r?\n/);
+
 const NOTESEP='|||';
-const set='nc';
 //var textbody=require("./textbody");
-const files=allfiles;//allfiles.splice(56,34);
+const files=allfiles;//.splice(56,34); 
+//splice(56,34) DN 有段號，但有些大經分誦，重新算號
+//splice(90,16) MN 中部無號
 
 //files=allfiles;
-// files.length=20;
-const context={text:[],pts:[],mulu:[],headers:[]};
+// files.length=215;
+const context={text:[],pts:[],mulu:[],headers:[],cnum:0,cnums:[],cnumwarning:[]};
 
 const tounicodechar=str=>{
 	if (str[0]!=="U")return '';
@@ -23,19 +28,80 @@ const tounicodechar=str=>{
 		return String.fromCharCode(0xd800+(U>>10),0xdc00+(U& 0x3ff));
 	}
 }
-const cnum={'Ò»':'1','¶þ':'2','Èý':'3','ËÄ':'4','Îå':'5',
-'Áù':'6','Æß':'7','°Ë':'8','¾Å':'9','©–':'0','£¨':'','£©':''};
-const parseChiNum=str=>{
-	let o='',s=str;
-	for (var c in cnum){
-		s=s.replace(c,cnum[c]);
-	}
-	return parseInt(s);
-}
+
 let in_l=false;
+const makeParanum=xmlid=>{
+	const m=xmlid.match(/(\d\d\d\d)([abc])(\d\d)(\d\d)?/);
+	if (!m) throw 'invalid p xml:id'+xmlid;
+	
+
+	if (set=='nc') {
+		return parseInt(m[1],10).toString()+String.fromCharCode(parseInt(m[3],10)+0x40);	
+	} else if (set=='t') {
+		return parseInt(m[1],10).toString()+(m[2]+(parseInt(m[3],10)).toString(36)).toUpperCase(); 
+	}
+}
+const cnum={'一':'1','二':'2','三':'3','四':'4','五':'5',
+'六':'6','七':'7','八':'8','九':'9','〇':'0','十':'1'};
+const parseChiNum=str=>{
+	let o='',f=0,s=str,floating=false;
+	for (let i=0;i<str.length;i++){
+		if (s[i] =='～') {
+			floating=true;
+			continue;
+		}
+		if (!cnum[s[i]]) return str;
+		if (floating) {
+			f=10*f+parseInt(cnum[s[i]])
+		} else {
+			if (!cnum[s[i]]) {
+				// console.log(s[i],'not num')
+			}
+			o+=cnum[ s[i] ]||'';
+		}
+	}
+	if (floating) { //一定比整數部大。不必前綴0
+		o+='.'+f;
+	}
+	return parseFloat(o);
+}
+const tryCnum=(_t,vpn)=>{
+	let t=_t;
+	const at=_t.indexOf("|||");
+	if (at>-1) {
+		t=t.substr(0,at);
+	}
+	// const at=_t.match('〔原本無')
+	if (t.length<10
+		&&isNaN(t)
+		&&t.indexOf('　')==-1
+		&&t[0]!=='|'
+		// &&linet.match(/[一二三四五六七八九十]/)
+		&&parseChiNum(t)) {
+		const cnum=parseChiNum(t);
+		
+		if (parseFloat(cnum)) {
+			if (context.cnum+1!= Math.floor(cnum) &&Math.floor(cnum)!=1) {
+				context.cnumwarning.push([vpn]);
+				// console.log('not continous cnum',context.cnum,cnum,vpn)
+			}
+			if (parseInt(cnum) !== parseFloat(cnum)) {
+				const int=parseInt(cnum)
+				let end=(cnum-int).toFixed(3);
+				while ( int >= Math.floor(end) ) end=end*10;
+				context.cnum=Math.floor(end);
+				// console.log(Math.floor(end))
+			} else {
+				context.cnum=parseInt(cnum);
+			}
+			return cnum.toString();	
+		}
+	}
+	return _t;
+}
 var p5tojson=function(content,vol,file){
 	let inbody=false,innote=false;
-	let linetext='',notetext='',
+	let linetext='',notetext='',pagenum=0,
 	lb_n='',// n of current lb
 	mulu_n='', //n of mulu start
 	p_n='', // n of current p
@@ -50,9 +116,9 @@ var p5tojson=function(content,vol,file){
 		} else if (e.name=="cb:div" ) {
 			// if (tagstack.length==5 && e.attributes.type=="taisho-notes") {}
 		} else if (e.name=="lb") {
-			const m=e.attributes.n.match(/(\d\d\d\d)a(\d\d)/);
-			if (!m) throw 'invalid lb n'+attributes.n
-			lb_n=parseInt(m[1],10).toString()+String.fromCharCode(parseInt(m[2],10)+0x40);
+			const m=e.attributes.n.match(/(\d\d\d\d)[abc](\d\d)/);
+			if (!m) throw 'invalid lb n'+e.attributes.n
+			lb_n=makeParanum(e.attributes.n);
 		} else if (e.name=="pb"){
 			pagenum=parseInt(e.attributes.n);
 		} else if (e.name=="ref"){
@@ -80,28 +146,35 @@ var p5tojson=function(content,vol,file){
 			}
 			const pn=e.attributes['xml:id'];
 			if (!pn)return;
-			const m=pn.match(/p(\d\d\d\d)a(\d\d)/);
-			if (!m) throw 'invalid p xml:id'+pn;
-			p_n=parseInt(m[1],10).toString()+String.fromCharCode(parseInt(m[2],10)+0x40);
+			p_n=makeParanum(pn)
 		} else if (e.name=='l') {
 			linetext+='\t';
 		    in_l=true;
 		}
 	}
 	const emitPara=()=>{
-		let linet=breakText(linetext).replace(/\t+/g,'\n');
+		let linet=linetext;//breakText(linetext).replace(/\t+/g,'\n');
 		linet=extractNote(linet).trim();
 		if (linet) {
 			const pn=mulu_n?mulu_n:p_n;
-			linet=extractRef(linet,vol+'_'+pn);
+			const vpn=vol+'_'+pn;
+			linet=extractRef(linet,vpn);
+			
+			if ( vpn=='6_41I') debugger;
+			const r=tryCnum(linet,vpn);
+			if (r!==linet) {
+				context.cnums.push([vpn,r]);
+				linetext=r+' ';
+				return;
+			}
 			const header=(ppn==pn)?'':(vol+'_'+pn+'|');
 			context.text.push(header+linet);
 			if (header) {
 				const padHeader= vol.toString().padStart(2,'0')+'_'+pn.padStart(4,'0');
 				context.headers.push( padHeader);
 			}
-			notes={};
 			ppn=pn;
+			notes={};
 			linetext='';
 		}
 		mulu_n='';
@@ -152,26 +225,7 @@ var p5tojson=function(content,vol,file){
 		}
 		return out.trim();
 	}
-	const breakText=t=>{
-		t=t.replace(/。([」』）〕—]+)([\u3400-\u9FFF、，〔（「『]{3})/g,'。$1\n$2')
-		.replace(/。([（「『〔]+)/g,'。\n$1')
-		.replace(/。([\u3400-\u9FFF、，（「『]{2,3})/g, '。\n$1')
-		.replace(/；([^\|\n\t])/g,'；\n$1')
-		// .replace(/。([\u3400-\u9FFF]{1,5})！/g,'$1\n$2！')
-		.replace(/([」』：])([「『〔])/g,'$1\n$2');
-
-		if (t.length>70) {
-			t=t.replace(/……([一二三四五六七八九十]，)/g,'……\n$1')
-			.replace(/([！？][」』〕]+)([^\|\n\t])/g,'$1\n$2')
-			.replace(/？([，\u3400-\u9FFF]{1,4})！([\u3400-\u9FFF]{1,2})/g,'？\n$1！$2')
-			.replace(/……〔乃至〕……/g,'……〔乃至〕……\n')
-			.replace(/」？([^\|\n\t])/g,'」？\n$1')
-			.replace(/〔……乃至……〕/g,'〔……乃至……〕\n')
-			.replace(/([^\n\t])(（[一二三四五六七八九〇]+）)([〔「\u3400-\u9FFF])/g,'$1\n$2$3')
-		}
-
-		return t.trim();
-	}
+	
 	var onclosetag=function(name){
 		const tagattributes=JSON.parse(tagstack[tagstack.length-1][1]);
 		if (tagstack[tagstack[tagstack.length-1][0] != name]) {
@@ -211,12 +265,7 @@ var p5tojson=function(content,vol,file){
 			// linetext=linetext.substr( 0, linetext.length-textpiece.length);
 		} else if (name=="cb:mulu") {
 			const lv=tagattributes.level;
-			let num=parseChiNum(textpiece);
-			if (num) {
-				context.mulu.push([lb_n+'\t'+lv+"@"+num]);
-			} else {
-				context.mulu.push([lb_n+'\t'+lv+"@"+textpiece]);
-			}
+			context.mulu.push([lb_n+'\t'+lv+"@"+textpiece]);
 			if (!mulu_n) mulu_n=lb_n; //record n of mulu line group
 			linetext=linetext.substr( 0, linetext.length-textpiece.length);
 			linetext+= String.fromCharCode(0x2460+ (parseInt(lv)-1));
@@ -247,8 +296,7 @@ var p5tojson=function(content,vol,file){
 }
 const dofile=file=>{
 	let vol=parseInt(file.substr(1));
-	// if (vol!==69) return;
-	const content=fs.readFileSync(folder+file,"utf8")
+	const content=fixerror(file.substr(4), fs.readFileSync(folder+file,"utf8"))
 	process.stdout.write("\r"+file);
 	p5tojson(content, vol, file);
 }
@@ -260,3 +308,5 @@ fs.writeFileSync(set+"-raw.txt",context.text.join("\n"),'utf8');
 fs.writeFileSync(set+"-headers.txt",context.headers.join("\n"),'utf8'); //bsearch ok
 fs.writeFileSync(set+"-pts.txt",context.pts.join('\n'),'utf8');//
 fs.writeFileSync(set+"-mulu.txt",context.mulu.join('\n'),'utf8');
+fs.writeFileSync(set+"-cnum.txt",context.cnums.join('\n'),'utf8');
+fs.writeFileSync(set+"-cnumwarning.txt",context.cnumwarning.join('\n'),'utf8');

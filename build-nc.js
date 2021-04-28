@@ -29,6 +29,6 @@ const build=()=>{
 	});
 	builder.addbook(prevbk);
 	const payload=[];//for PTS mapping
-	builder.done(payload,{headerline:pack_delta(headerline)});
+	builder.done(payload,{$headerline:pack_delta(headerline)});
 }
 build();
