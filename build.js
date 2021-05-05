@@ -9,7 +9,7 @@ const build=()=>{
 
 	builder.newpage(1,0,"1"); //cap._ is zero based, need to add a pseudo page 
 	raw.forEach(line=>{
-		const m=line.match(/(\d+)_(\d+)x(\d+)\t(.*)/);
+		const m=line.match(/(\d+)_(\d+)([A-Z])\t(.*)/);
 		if (!m) throw 'error line '+line;
 		let [mm,bk,pg,ln,text]=m;
 		pg=parseInt(pg);

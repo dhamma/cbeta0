@@ -187,7 +187,7 @@ var p5tojson=function(content,vol,file){
 				let noteptrlen=0;
 				let t=line.replace(/\^(\d+)/g,(m,m1,off)=>{
 					if (!notes[m1]) return ''; //deal with drop table in vol 52, note 0122013 and so on
-					note+=(off - noteptrlen)+'^'+notes[m1]+' ';
+					note+=(off - noteptrlen)+'^'+notes[m1].replace(/>/g,'＞').replace(/</g,'＜')+' ';
 					noteptrlen+=m.length;
 					return '';
 				})
@@ -237,9 +237,7 @@ var p5tojson=function(content,vol,file){
 			innote=false;
 			let nt=notetext.trim(); //some notes has crlf
 			notetext='';
-			if (!tagattributes.n) {
-				return;
-			}
+			if (!tagattributes.n) return;
 			const type=tagattributes.type;
 			
 			if (type!=='orig')return;

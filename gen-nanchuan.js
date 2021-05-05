@@ -1,8 +1,4 @@
 'use stricts';
-const standoffNotePtr=true; //use string offset as note ptr
-
-
-
 const fs=require("fs");
 const Sax=require("sax");
 // const folder="../../CBReader2X/Bookcase/CBETA/XML/N/";
@@ -14,7 +10,8 @@ const LANGSEP='|||';
 const set='nanchuan';
 //var notes=require("./notes");
 //var textbody=require("./textbody");
-const files=allfiles;//allfiles.splice(56,34);
+const files=allfiles;//.splice(56,34);
+//allfiles.splice(56,34);
 
 //files=allfiles;
 //files.length=10;
@@ -41,7 +38,8 @@ const parseChiNum=str=>{
 	}
 	return parseInt(s);
 }
-let lb='',pagenum;
+let lb='',pagenum,drop=false;
+
 var p5tojson=function(content,vol,file){
 	let inbody=false,innote=false;
 	let linetext='',notetext='';
@@ -51,6 +49,34 @@ var p5tojson=function(content,vol,file){
 		parser.onopentag=onopentag;
 		parser.onclosetag=onclosetag;
 		parser.ontext=ontext;
+	}
+	const emitLine=(attributes)=>{
+		let linet=linetext.replace(/\r?\n/g,"");
+		const standoffnotes=[];
+		let acclen=0;
+		if (notes.length) {
+			linet=linet.replace(/\^(\d+)/g,(m,m1,off)=>{
+				if (!notes.length) {
+					console.log('no more note',file,attributes.n, linet);
+					return '';
+				}
+				standoffnotes.push(off-acclen+'^'+notes[0][1].replace(/>/g,'＞').replace(/</g,'＜'));
+					acclen+=m.length;
+					notes.shift();
+			return '';
+			});
+			if (notes.length) {
+				//if (notes.length!==1) console.log('more than one note for empty line',file,e.attributes.n);
+				linet+=LANGSEP+'0^'+notes.map(note=>note[1]).join(' '); //combine
+			} else linet+=LANGSEP+standoffnotes.join(' ');
+		};
+		
+		notes.length=0;
+	
+		if (lb) context.text.push(lb+'\t'+linet);
+		lb='';
+		if (attributes.n) lb=vol+"_"+pagenum+String.fromCharCode(parseInt(attributes.n.substr(5),10)+0x40)
+		linetext='';
 	}
 	var onopentag=function(e){
 		tagstack.push([e.name,JSON.stringify(e.attributes)]);
@@ -63,21 +89,8 @@ var p5tojson=function(content,vol,file){
 				//notes(context,parser,"cb:div");
 			}
 		} else if (e.name=="lb") {
-			//if (lb=="13:39.01") debugger
-			let linet=linetext.replace(/\r?\n/g,"");
-			
-			if (notes.length) {
-				const notesuffix=notes.map(note=>{
-					const nid=(standoffNotePtr?standoffets[note[0]]:note[0])
-					return nid+'^'+note[1];
-				}).join("^^");
-				linet+=LANGSEP+notesuffix;
-				notes.length=0;
-			}
-			standoffets={};
-			if (lb) context.text.push(lb+'\t'+linet);
-			lb=vol+"_"+pagenum+"x"+(parseInt(e.attributes.n.substr(5))-1);
-			linetext='';
+			// if (e.attributes.n=='0237a14' && vol==14) debugger;
+			emitLine(e.attributes);
 		} else if (e.name=="pb"){
 			pagenum=parseInt(e.attributes.n);
 		} else if (e.name=="ref"){
@@ -86,22 +99,17 @@ var p5tojson=function(content,vol,file){
 				if (lb) context.pts.push([lb,ref.substr(4)])
 			}
 		} else if (e.name=="note") {
+			innote=true;
+
+		    if (e.attributes.type!=='orig')return;
 			if (!e.attributes.n) {
 				return;
 			}
 			let n=parseInt(e.attributes.n.substr(4));
 			if (n){
-				if (standoffNotePtr) {
-					// if (standoffets[n]) {
-						//type="mod" override type="orig" note
-						//console.log('warning repeat note',n,file+'@'+lb);
-					// }
-					standoffets[n]=linetext.length;
-				} else {
-					linetext+="^"+n;
-				}
+				linetext+="^"+n;
 			}
-			innote=true;
+			
 		} else if (e.name=="g") {
 			let ref=e.attributes.ref.substr(1);
 			if (replacechar[ref]) {
@@ -117,9 +125,9 @@ var p5tojson=function(content,vol,file){
 			//}
 		} else if (e.name=='l') {
 		    linetext+='\t　';
+		} else if (e.name=='rdg'){
+			drop=true;
 		}
-		 
-
 	}
 	var onclosetag=function(name){
 		const tagattributes=JSON.parse(tagstack[tagstack.length-1][1]);
@@ -129,16 +137,13 @@ var p5tojson=function(content,vol,file){
 		if (name=="l"){
 			//linetext="　"+linetext.trim();
 		}else if (name=="note"){
+			innote=false;
 			let nt=notetext.trim(); //some notes has crlf
 			notetext='';
-			if (!tagattributes.n) {
-				return;
-			}
-			const ty=tagattributes.type;
-			innote=false;
-			if (ty=="add"||ty=="cf1"||ty=="star"||ty=="inline"||ty=="mod") {
-				return; //added by cbeta
-			}
+			if (!tagattributes.n) return;
+			const type=tagattributes.type;
+			
+			if (type!=='orig')return;
 			
 			let n=parseInt(tagattributes.n.substr(4));
 			if (isNaN(n)){
@@ -154,15 +159,13 @@ var p5tojson=function(content,vol,file){
 				gref='';
 			}
 		} else if (name=="rdg") { //drop rdg, use lem
-			if (innote) {
-				notetext=notetext.substr(0, notetext.length-textpiece.length);
-			} else {
-				linetext=linetext.substr(0, linetext.length-textpiece.length);
-			}
+			drop=false;
 			textpiece='';
 		} else if (name=="head") {
 			//head innertext is redundant
-			linetext=linetext.substr( 0, linetext.length-textpiece.length);
+			if (linetext.endsWith(textpiece)) { //  fixed for N14p0237a14 , <head> contains notes
+				linetext=linetext.substr( 0, linetext.length-textpiece.length);
+			}
 		} else if (name=="cb:mulu") {
 			const lv=tagattributes.level;
 			
@@ -174,6 +177,8 @@ var p5tojson=function(content,vol,file){
 			}
 			//linetext=linetext.substr( 0, linetext.length-textpiece.length);
 			textpiece='';
+		} else if (name=='body') {
+			emitLine({}); //attributes is invalid at end of file
 		}
 		tagstack.pop();
 	}
@@ -184,7 +189,7 @@ var p5tojson=function(content,vol,file){
 		if (innote) {
 			notetext+=t;
 		} else {
-			linetext+=t;
+			if (!drop) linetext+=textpiece;
 		}
 	}
 
